@@ -1,30 +1,32 @@
 """
-GUIDE OPTUNA COMPLET - Trading RL Gold
-Version 4.0 PRO - ORDRE REVISE (Impact Maximum)
+DASHBOARD OPTUNA INTEGRE - Trading RL Gold
+Version 5.0 - CONNEXION DIRECTE AUX ETUDES OPTUNA
 """
 
 import streamlit as st
 import pandas as pd
+import os
+from pathlib import Path
+
+# Optuna import (optionnel si pas installé sur Streamlit Cloud)
+try:
+    import optuna
+    OPTUNA_AVAILABLE = True
+except ImportError:
+    OPTUNA_AVAILABLE = False
 
 st.set_page_config(
-    page_title="Guide Optuna - RL Trading Gold",
-    page_icon="🏆",
+    page_title="Dashboard Optuna - RL Trading Gold",
+    page_icon="🔬",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Initialize session state - ORDRE REVISE (Impact Maximum)
-if 'progress' not in st.session_state:
-    st.session_state.progress = {
-        'rl_params': False,
-        'rewards': False,
-        'features': False,
-        'architecture': False,
-        'indicateurs': False,
-        'volatilite': False,
-        'temporels': False,
-        'sltp': False,
-    }
+# Chemins vers les bases Optuna
+OPTUNA_PATHS = {
+    'rl_params': Path(r"C:\Users\lbye3\Desktop\AGENT 8 UNIQUEMENT\training\optuna_study.db"),
+    'rewards': Path(r"C:\Users\lbye3\Desktop\AGENT 8 UNIQUEMENT\training\optuna_reward.db"),
+}
 
 # CSS
 st.markdown("""
@@ -37,9 +39,9 @@ st.markdown("""
         margin-bottom: 30px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.3);
     }
-    .main-header h1 { color: #ffd700; font-size: 3rem; margin-bottom: 10px; }
-    .main-header p { color: #e8e8e8; font-size: 1.3rem; }
-    .phase-card {
+    .main-header h1 { color: #ffd700; font-size: 2.5rem; margin-bottom: 10px; }
+    .main-header p { color: #e8e8e8; font-size: 1.2rem; }
+    .study-card {
         background: linear-gradient(145deg, #ffffff, #f0f0f5);
         border-radius: 20px;
         padding: 25px;
@@ -47,455 +49,390 @@ st.markdown("""
         box-shadow: 0 8px 32px rgba(0,0,0,0.1);
         border: 2px solid #e0e0e0;
     }
-    .phase-card-done { background: linear-gradient(145deg, #e8f5e9, #c8e6c9); border: 2px solid #4caf50; }
-    .phase-card-pending { background: linear-gradient(145deg, #fff3e0, #ffe0b2); border: 2px solid #ff9800; }
-    .phase-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; }
-    .phase-number {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white; width: 50px; height: 50px; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700;
+    .study-card-done { background: linear-gradient(145deg, #e8f5e9, #c8e6c9); border: 2px solid #4caf50; }
+    .study-card-running { background: linear-gradient(145deg, #fff3e0, #ffe0b2); border: 2px solid #ff9800; }
+    .study-card-pending { background: linear-gradient(145deg, #fce4ec, #f8bbd9); border: 2px solid #e91e63; }
+    .metric-box {
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        color: white; padding: 20px; border-radius: 15px; text-align: center;
+        margin: 5px;
     }
-    .progress-container { background: #e0e0e0; border-radius: 25px; height: 40px; margin: 20px 0; overflow: hidden; }
+    .metric-value { font-size: 2rem; font-weight: 700; color: #ffd700; }
+    .metric-label { font-size: 0.9rem; opacity: 0.9; }
+    .best-params {
+        background: linear-gradient(135deg, #4caf50, #8bc34a);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 10px 0;
+    }
+    .param-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.2); }
+    .progress-container { background: #e0e0e0; border-radius: 25px; height: 30px; margin: 20px 0; overflow: hidden; }
     .progress-bar {
         background: linear-gradient(90deg, #4caf50, #8bc34a);
         height: 100%; border-radius: 25px;
         display: flex; align-items: center; justify-content: center;
-        color: white; font-weight: 700; font-size: 1.1rem;
+        color: white; font-weight: 700;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-        color: white; padding: 25px; border-radius: 15px; text-align: center;
-    }
-    .metric-value { font-size: 2.5rem; font-weight: 700; color: #ffd700; }
-    .metric-label { font-size: 1rem; opacity: 0.9; }
-    .status-done { background: linear-gradient(135deg, #4caf50, #8bc34a); color: white; padding: 8px 20px; border-radius: 25px; font-weight: 700; }
-    .status-pending { background: linear-gradient(135deg, #ff9800, #ffc107); color: #1a1a2e; padding: 8px 20px; border-radius: 25px; font-weight: 700; }
-    .category-header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 10px 20px; border-radius: 10px; margin: 10px 0; font-weight: 600; }
-    .reason-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 10px 0; border-radius: 0 10px 10px 0; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
+# =============================================================================
+# FONCTIONS OPTUNA
+# =============================================================================
+
+def load_optuna_study(db_path: Path, study_name: str = None):
+    """Charge une étude Optuna depuis une base SQLite"""
+    if not OPTUNA_AVAILABLE:
+        return None
+    if not db_path.exists():
+        return None
+
+    try:
+        storage = f"sqlite:///{db_path}"
+        studies = optuna.study.get_all_study_names(storage)
+
+        if not studies:
+            return None
+
+        # Prendre la première étude ou celle spécifiée
+        study_name = study_name or studies[0]
+        study = optuna.load_study(study_name=study_name, storage=storage)
+        return study
+    except Exception as e:
+        st.error(f"Erreur chargement étude: {e}")
+        return None
+
+def get_study_stats(study):
+    """Extrait les statistiques d'une étude"""
+    if study is None:
+        return None
+
+    trials = study.trials
+    completed = [t for t in trials if t.state == optuna.trial.TrialState.COMPLETE]
+
+    if not completed:
+        return {
+            'n_trials': 0,
+            'n_completed': 0,
+            'best_value': None,
+            'best_params': {},
+            'status': 'pending'
+        }
+
+    return {
+        'n_trials': len(trials),
+        'n_completed': len(completed),
+        'best_value': study.best_value,
+        'best_params': study.best_params,
+        'status': 'done' if len(completed) >= 50 else 'running'
+    }
+
+# =============================================================================
 # HEADER
+# =============================================================================
+
 st.markdown("""
 <div class="main-header">
-    <h1>🏆 GUIDE OPTUNA COMPLET</h1>
-    <p>Optimisation Professionnelle pour Agent RL Trading Gold</p>
-    <p style="color: #ffd700; font-weight: 600;">ORDRE REVISE - IMPACT MAXIMUM</p>
+    <h1>🔬 DASHBOARD OPTUNA INTEGRE</h1>
+    <p>Connexion Directe aux Études Optuna - Agent 8 RL Trading Gold</p>
 </div>
 """, unsafe_allow_html=True)
 
-# METRICS
-completed = sum(st.session_state.progress.values())
-progress_pct = int((completed / 8) * 100)
+# =============================================================================
+# SIDEBAR - CONFIGURATION
+# =============================================================================
+
+with st.sidebar:
+    st.markdown("## ⚙️ Configuration")
+
+    st.markdown("### 📂 Chemins Optuna")
+
+    # Permettre de modifier les chemins
+    rl_params_path = st.text_input(
+        "Étude Hyperparamètres RL",
+        value=str(OPTUNA_PATHS['rl_params']),
+        key="path_rl"
+    )
+
+    rewards_path = st.text_input(
+        "Étude Rewards",
+        value=str(OPTUNA_PATHS['rewards']),
+        key="path_rewards"
+    )
+
+    # Upload de fichier .db (pour Streamlit Cloud)
+    st.markdown("---")
+    st.markdown("### 📤 Ou Uploader des fichiers .db")
+
+    uploaded_rl = st.file_uploader("Upload optuna_study.db", type=['db'], key="upload_rl")
+    uploaded_reward = st.file_uploader("Upload optuna_reward.db", type=['db'], key="upload_reward")
+
+    if uploaded_rl:
+        # Sauvegarder temporairement
+        temp_path = Path("/tmp/optuna_study.db")
+        with open(temp_path, 'wb') as f:
+            f.write(uploaded_rl.read())
+        rl_params_path = str(temp_path)
+
+    if uploaded_reward:
+        temp_path = Path("/tmp/optuna_reward.db")
+        with open(temp_path, 'wb') as f:
+            f.write(uploaded_reward.read())
+        rewards_path = str(temp_path)
+
+# =============================================================================
+# CHARGEMENT DES ETUDES
+# =============================================================================
+
+studies_data = {}
+
+# Étude 1: Hyperparamètres RL
+study_rl = load_optuna_study(Path(rl_params_path))
+studies_data['rl_params'] = get_study_stats(study_rl)
+
+# Étude 2: Rewards
+study_reward = load_optuna_study(Path(rewards_path))
+studies_data['rewards'] = get_study_stats(study_reward)
+
+# =============================================================================
+# METRIQUES GLOBALES
+# =============================================================================
+
+total_studies = 2
+completed_studies = sum(1 for s in studies_data.values() if s and s.get('status') == 'done')
+running_studies = sum(1 for s in studies_data.values() if s and s.get('status') == 'running')
+total_trials = sum(s.get('n_completed', 0) for s in studies_data.values() if s)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.markdown(f'<div class="metric-card"><div class="metric-value">150+</div><div class="metric-label">Parametres</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-box"><div class="metric-value">{total_trials}</div><div class="metric-label">Trials Complétés</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown(f'<div class="metric-card"><div class="metric-value">8</div><div class="metric-label">Categories</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-box"><div class="metric-value">{completed_studies}/8</div><div class="metric-label">Études Terminées</div></div>', unsafe_allow_html=True)
 with col3:
-    st.markdown(f'<div class="metric-card"><div class="metric-value">{completed}/8</div><div class="metric-label">Phases Terminees</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-box"><div class="metric-value">{running_studies}</div><div class="metric-label">En Cours</div></div>', unsafe_allow_html=True)
 with col4:
-    st.markdown(f'<div class="metric-card"><div class="metric-value">~48h</div><div class="metric-label">Temps Total</div></div>', unsafe_allow_html=True)
+    best_roi = None
+    if studies_data['rl_params'] and studies_data['rl_params'].get('best_value'):
+        best_roi = studies_data['rl_params']['best_value']
+    st.markdown(f'<div class="metric-box"><div class="metric-value">{best_roi:.2f}%</div><div class="metric-label">Meilleur ROI</div></div>' if best_roi else '<div class="metric-box"><div class="metric-value">-</div><div class="metric-label">Meilleur ROI</div></div>', unsafe_allow_html=True)
 
-st.markdown(f'<div class="progress-container"><div class="progress-bar" style="width: {max(progress_pct, 5)}%;">{progress_pct}% Complete</div></div>', unsafe_allow_html=True)
-
-if completed == 8:
-    st.balloons()
-    st.success("🎉 **TOUTES LES PHASES TERMINEES!** Pret pour le TRAINING FINAL (1.5M steps)")
+progress_pct = int((completed_studies / 8) * 100)
+st.markdown(f'<div class="progress-container"><div class="progress-bar" style="width: {max(progress_pct, 5)}%;">{progress_pct}% Optimisation Complète</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown("## 📋 PHASES D'OPTIMISATION (Ordre Impact Maximum)")
 
-# ============================================================================
-# PHASE 1: RL PARAMS (PREMIER - LE PLUS IMPORTANT)
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['rl_params'] = st.checkbox("", value=st.session_state.progress['rl_params'], key="cb1")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['rl_params'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['rl_params'] else '<span class="status-pending">⏳ A FAIRE</span>'
+# =============================================================================
+# ETUDE 1: HYPERPARAMETRES RL
+# =============================================================================
 
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">1</span>
-            HYPERPARAMETRES RL 🔥
-            {status_text}
+st.markdown("## 📊 Études Optuna Détectées")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    stats = studies_data['rl_params']
+    if stats:
+        status_class = f"study-card-{stats['status']}"
+        status_emoji = "✅" if stats['status'] == 'done' else "🔄" if stats['status'] == 'running' else "⏳"
+
+        st.markdown(f"""
+        <div class="study-card {status_class}">
+            <h3>{status_emoji} Étude 1: Hyperparamètres RL</h3>
+            <p><strong>Fichier:</strong> optuna_study.db</p>
+            <p><strong>Trials:</strong> {stats['n_completed']} complétés</p>
+            <p><strong>Meilleur Score:</strong> {stats['best_value']:.4f if stats['best_value'] else 'N/A'}</p>
         </div>
-        <div class="reason-box">
-            <strong>Pourquoi en premier?</strong> Si learning_rate ou entropy sont mauvais, l'agent n'apprendra JAMAIS. C'est la base de tout.
+        """, unsafe_allow_html=True)
+
+        if stats['best_params']:
+            with st.expander("🏆 MEILLEURS PARAMETRES TROUVES", expanded=True):
+                params_df = pd.DataFrame([
+                    {"Paramètre": k, "Valeur Optimale": f"{v:.6f}" if isinstance(v, float) else str(v)}
+                    for k, v in stats['best_params'].items()
+                ])
+                st.dataframe(params_df, use_container_width=True, hide_index=True)
+    else:
+        st.markdown("""
+        <div class="study-card study-card-pending">
+            <h3>⏳ Étude 1: Hyperparamètres RL</h3>
+            <p><strong>Status:</strong> Non trouvée ou vide</p>
+            <p>Upload le fichier optuna_study.db dans la sidebar</p>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - RL", expanded=False):
-        tab_ppo, tab_sac, tab_td3, tab_a2c = st.tabs(["PPO (Agent 7)", "SAC (Agent 8)", "TD3 (Agent 9)", "A2C (Agent 11)"])
+with col2:
+    stats = studies_data['rewards']
+    if stats:
+        status_class = f"study-card-{stats['status']}"
+        status_emoji = "✅" if stats['status'] == 'done' else "🔄" if stats['status'] == 'running' else "⏳"
 
-        with tab_ppo:
-            st.markdown('<div class="category-header">🔹 PPO - Proximal Policy Optimization</div>', unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame({
-                "Parametre": ["learning_rate", "n_steps", "batch_size", "n_epochs", "gamma", "gae_lambda", "clip_range", "ent_coef_start", "ent_coef_end", "vf_coef", "max_grad_norm"],
-                "Range": ["1e-6 to 1e-3", "512 - 4096", "32 - 256", "5 - 20", "0.9 - 0.999", "0.9 - 0.99", "0.1 - 0.3", "0.1 - 0.5", "0.01 - 0.1", "0.3 - 0.7", "0.3 - 1.0"],
-                "Default": ["1e-4", 2048, 64, 10, 0.99, 0.95, 0.2, 0.20, 0.05, 0.5, 0.5],
-                "Impact": ["🔴 CRITIQUE", "🟡 MOYEN", "🟡 MOYEN", "🟢 BAS", "🔴 CRITIQUE", "🟢 BAS", "🟢 BAS", "🔴 CRITIQUE", "🔴 ELEVE", "🟢 BAS", "🟢 BAS"]
-            }), use_container_width=True, hide_index=True)
-
-        with tab_sac:
-            st.markdown('<div class="category-header">🔹 SAC - Soft Actor-Critic</div>', unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame({
-                "Parametre": ["learning_rate", "buffer_size", "batch_size", "tau", "gamma", "learning_starts", "train_freq", "gradient_steps"],
-                "Range": ["1e-5 to 1e-3", "50K - 500K", "128 - 512", "0.001 - 0.02", "0.95 - 0.999", "1K - 20K", "1 - 8", "1 - 4"],
-                "Default": ["3e-4", "100K", 256, 0.005, 0.99, "10K", 1, 1],
-                "Impact": ["🔴 CRITIQUE", "🟡 MOYEN", "🟡 MOYEN", "🟢 BAS", "🔴 CRITIQUE", "🟡 MOYEN", "🟢 BAS", "🟢 BAS"]
-            }), use_container_width=True, hide_index=True)
-
-        with tab_td3:
-            st.markdown('<div class="category-header">🔹 TD3 - Twin Delayed DDPG</div>', unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame({
-                "Parametre": ["learning_rate", "buffer_size", "batch_size", "tau", "gamma", "policy_delay", "target_policy_noise", "target_noise_clip"],
-                "Range": ["1e-5 to 1e-3", "50K - 500K", "128 - 512", "0.001 - 0.02", "0.95 - 0.999", "1 - 4", "0.1 - 0.3", "0.3 - 0.7"],
-                "Default": ["3e-4", "100K", 256, 0.005, 0.99, 2, 0.2, 0.5],
-                "Impact": ["🔴 CRITIQUE", "🟡 MOYEN", "🟡 MOYEN", "🟢 BAS", "🔴 CRITIQUE", "🟡 MOYEN", "🟡 MOYEN", "🟢 BAS"]
-            }), use_container_width=True, hide_index=True)
-
-        with tab_a2c:
-            st.markdown('<div class="category-header">🔹 A2C - Advantage Actor-Critic</div>', unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame({
-                "Parametre": ["learning_rate", "n_steps", "gamma", "gae_lambda", "ent_coef", "vf_coef", "max_grad_norm"],
-                "Range": ["1e-5 to 1e-2", "3 - 20", "0.95 - 0.999", "0.9 - 0.99", "0.0 - 0.2", "0.3 - 0.7", "0.3 - 1.0"],
-                "Default": ["7e-4", 5, 0.99, 0.95, 0.01, 0.5, 0.5],
-                "Impact": ["🔴 CRITIQUE", "🟡 MOYEN", "🔴 CRITIQUE", "🟢 BAS", "🟡 MOYEN", "🟢 BAS", "🟢 BAS"]
-            }), use_container_width=True, hide_index=True)
-
-# ============================================================================
-# PHASE 2: REWARDS
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['rewards'] = st.checkbox("", value=st.session_state.progress['rewards'], key="cb2")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['rewards'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['rewards'] else '<span class="status-pending">⏳ A FAIRE</span>'
-
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">2</span>
-            FONCTION DE REWARD ⚠️
-            {status_text}
+        st.markdown(f"""
+        <div class="study-card {status_class}">
+            <h3>{status_emoji} Étude 2: Fonction de Reward</h3>
+            <p><strong>Fichier:</strong> optuna_reward.db</p>
+            <p><strong>Trials:</strong> {stats['n_completed']} complétés</p>
+            <p><strong>Meilleur Score:</strong> {stats['best_value']:.4f if stats['best_value'] else 'N/A'}</p>
         </div>
-        <div class="reason-box">
-            <strong>Pourquoi en deuxieme?</strong> La reward definit CE QUE l'agent apprend. Mauvaise reward = agent qui apprend les mauvais comportements.
+        """, unsafe_allow_html=True)
+
+        if stats['best_params']:
+            with st.expander("🏆 MEILLEURS PARAMETRES TROUVES", expanded=True):
+                params_df = pd.DataFrame([
+                    {"Paramètre": k, "Valeur Optimale": f"{v:.6f}" if isinstance(v, float) else str(v)}
+                    for k, v in stats['best_params'].items()
+                ])
+                st.dataframe(params_df, use_container_width=True, hide_index=True)
+    else:
+        st.markdown("""
+        <div class="study-card study-card-pending">
+            <h3>⏳ Étude 2: Fonction de Reward</h3>
+            <p><strong>Status:</strong> Non trouvée ou vide</p>
+            <p>Upload le fichier optuna_reward.db dans la sidebar</p>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - REWARDS", expanded=False):
-        st.markdown('<div class="category-header">🔹 Poids Principaux</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["reward_profit_weight", "reward_sharpe_weight", "reward_dd_weight", "reward_trade_weight"],
-            "Range": ["0.3 - 0.6", "0.1 - 0.3", "0.05 - 0.20", "0.05 - 0.15"],
-            "Default": [0.40, 0.20, 0.10, 0.10],
-            "Impact": ["🔴 CRITIQUE", "🔴 CRITIQUE", "🔴 ELEVE", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
+# =============================================================================
+# ETUDES A CREER
+# =============================================================================
 
-        st.markdown('<div class="category-header">🔹 Bonus et Penalites</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["bonus_win", "penalty_loss", "bonus_4r_plus", "bonus_quick_cut", "penalty_hold_too_long"],
-            "Range": ["0.01 - 0.10", "-0.15 to -0.05", "0.10 - 0.30", "0.01 - 0.05", "-0.05 to -0.01"],
-            "Default": [0.05, -0.10, 0.20, 0.03, -0.02],
-            "Impact": ["🟡 MOYEN", "🟡 MOYEN", "🟡 MOYEN", "🟡 MOYEN", "🟢 BAS"]
-        }), use_container_width=True, hide_index=True)
+st.markdown("---")
+st.markdown("## 📋 Études Restantes à Créer")
 
-        st.markdown('<div class="category-header">🔹 Risk & Shaping</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["penalty_ftmo_breach", "penalty_daily_breach", "direction_bonus", "diversity_penalty"],
-            "Range": ["-5.0 to -1.0", "-2.0 to -0.5", "0.01 - 0.05", "-0.10 to -0.01"],
-            "Default": [-2.0, -1.0, 0.02, -0.05],
-            "Impact": ["🔴 CRITIQUE", "🔴 CRITIQUE", "🟡 MOYEN", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
+remaining_studies = [
+    {
+        'name': 'Features Selection',
+        'description': 'Sélection des meilleures features (SHAP, importance)',
+        'db_name': 'optuna_features.db',
+        'params': ['n_features', 'use_momentum', 'use_cot', 'scaler_type']
+    },
+    {
+        'name': 'Architecture Réseau',
+        'description': 'Taille et forme du réseau de neurones',
+        'db_name': 'optuna_architecture.db',
+        'params': ['n_layers', 'layer_size', 'net_arch_pattern']
+    },
+    {
+        'name': 'Indicateurs Techniques',
+        'description': 'Périodes RSI, MACD, BB, ATR',
+        'db_name': 'optuna_indicators.db',
+        'params': ['rsi_period', 'macd_fast', 'macd_slow', 'bb_period']
+    },
+    {
+        'name': 'Filtres Volatilité',
+        'description': 'Quand trader (ATR, BB width)',
+        'db_name': 'optuna_volatility.db',
+        'params': ['atr_filter_min', 'atr_filter_max', 'bb_width_min']
+    },
+    {
+        'name': 'Filtres Temporels',
+        'description': 'Sessions, jours, news buffer',
+        'db_name': 'optuna_temporal.db',
+        'params': ['trade_london', 'trade_ny', 'news_buffer']
+    },
+    {
+        'name': 'SL/TP & Risk',
+        'description': 'Stop Loss, Take Profit, Risk par trade',
+        'db_name': 'optuna_sltp.db',
+        'params': ['sl_atr_mult', 'tp_rr_ratio', 'risk_per_trade']
+    }
+]
 
-# ============================================================================
-# PHASE 3: FEATURES
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['features'] = st.checkbox("", value=st.session_state.progress['features'], key="cb3")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['features'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['features'] else '<span class="status-pending">⏳ A FAIRE</span>'
-
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">3</span>
-            SELECTION DE FEATURES
-            {status_text}
+cols = st.columns(3)
+for i, study in enumerate(remaining_studies):
+    with cols[i % 3]:
+        st.markdown(f"""
+        <div class="study-card study-card-pending">
+            <h4>⏳ {study['name']}</h4>
+            <p style="font-size: 0.9rem; color: #666;">{study['description']}</p>
+            <p style="font-size: 0.8rem;"><strong>DB:</strong> {study['db_name']}</p>
+            <p style="font-size: 0.8rem;"><strong>Params:</strong> {', '.join(study['params'][:3])}...</p>
         </div>
-        <div class="reason-box">
-            <strong>Pourquoi en troisieme?</strong> Les features sont l'INFORMATION que l'agent voit. Garbage in = Garbage out.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - FEATURES", expanded=False):
-        st.markdown('<div class="category-header">🔹 Nombre de Features</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["n_features", "n_price_features", "n_volume_features", "n_technical_features", "n_macro_features"],
-            "Range": ["30 - 150", "5 - 20", "2 - 10", "15 - 50", "3 - 15"],
-            "Default": [100, 10, 5, 30, 8],
-            "Impact": ["🔴 ELEVE", "🟡 MOYEN", "🟢 BAS", "🟡 MOYEN", "🟢 BAS"]
-        }), use_container_width=True, hide_index=True)
+# =============================================================================
+# GUIDE RAPIDE
+# =============================================================================
 
-        st.markdown('<div class="category-header">🔹 Categories</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["use_momentum", "use_trend", "use_volatility", "use_volume", "use_cot", "use_macro", "use_seasonality"],
-            "Options": ["True/False"] * 7,
-            "Recommande": [True] * 7,
-            "Impact": ["🟡 MOYEN"] * 7
-        }), use_container_width=True, hide_index=True)
+st.markdown("---")
+st.markdown("## 🚀 Guide Rapide - Créer une Nouvelle Étude")
 
-        st.markdown('<div class="category-header">🔹 Normalisation</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["scaler_type", "zscore_window", "clip_outliers"],
-            "Options": ["Standard/Robust/MinMax", "20 - 100", "2.0 - 5.0"],
-            "Recommande": ["RobustScaler", 50, 3.0],
-            "Impact": ["🔴 ELEVE", "🟡 MOYEN", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
+with st.expander("📝 Template Optuna pour nouvelle étude", expanded=False):
+    st.code("""
+import optuna
+from optuna.samplers import TPESampler
+from optuna.pruners import MedianPruner
 
-# ============================================================================
-# PHASE 4: ARCHITECTURE
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['architecture'] = st.checkbox("", value=st.session_state.progress['architecture'], key="cb4")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['architecture'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['architecture'] else '<span class="status-pending">⏳ A FAIRE</span>'
+def objective(trial):
+    # Suggérer les paramètres
+    param1 = trial.suggest_float('learning_rate', 1e-5, 1e-3, log=True)
+    param2 = trial.suggest_int('n_steps', 512, 4096, step=512)
+    param3 = trial.suggest_categorical('net_arch', ['small', 'medium', 'large'])
 
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">4</span>
-            ARCHITECTURE RESEAU
-            {status_text}
-        </div>
-        <div class="reason-box">
-            <strong>Pourquoi en quatrieme?</strong> L'architecture determine la CAPACITE du modele a apprendre des patterns complexes.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Créer et entraîner l'environnement
+    # ...
 
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - ARCHITECTURE", expanded=False):
-        st.markdown('<div class="category-header">🔹 Structure du Reseau</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["n_layers", "layer_size", "net_arch_pattern"],
-            "Options": ["2 - 4", "64 - 1024", "small/medium/large/deep/pyramid"],
-            "Recommande": [2, 256, "medium [256,256]"],
-            "Impact": ["🔴 ELEVE", "🔴 ELEVE", "🔴 ELEVE"]
-        }), use_container_width=True, hide_index=True)
+    # Retourner la métrique à optimiser
+    return roi_pct  # ou -roi_pct si minimize
 
-        st.markdown('<div class="category-header">🔹 Architectures Predefinies</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Pattern": ["small", "medium", "large", "deep", "pyramid"],
-            "Architecture": ["[64, 64]", "[256, 256]", "[512, 512]", "[256, 256, 256]", "[512, 256, 128]"],
-            "Usage": ["Rapide", "RECOMMANDE", "Plus capacite", "3 couches", "Progressif"]
-        }), use_container_width=True, hide_index=True)
+# Créer l'étude
+study = optuna.create_study(
+    study_name="nouvelle_etude",
+    storage="sqlite:///optuna_nouvelle.db",
+    direction="maximize",  # ou "minimize"
+    sampler=TPESampler(seed=42),
+    pruner=MedianPruner(n_startup_trials=10)
+)
 
-# ============================================================================
-# PHASE 5: INDICATEURS
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['indicateurs'] = st.checkbox("", value=st.session_state.progress['indicateurs'], key="cb5")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['indicateurs'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['indicateurs'] else '<span class="status-pending">⏳ A FAIRE</span>'
+# Lancer l'optimisation
+study.optimize(objective, n_trials=100, timeout=3600*6)
 
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">5</span>
-            INDICATEURS TECHNIQUES
-            {status_text}
-        </div>
-        <div class="reason-box">
-            <strong>Pourquoi en cinquieme?</strong> Fine-tuning des indicateurs - les periodes RSI, MACD etc. Impact moyen sur performance.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# Afficher les meilleurs paramètres
+print(f"Best value: {study.best_value}")
+print(f"Best params: {study.best_params}")
+""", language="python")
 
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - INDICATEURS", expanded=False):
-        st.markdown('<div class="category-header">🔹 RSI</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["rsi_period", "rsi_oversold", "rsi_overbought"],
-            "Range": ["5 - 30", "15 - 35", "65 - 85"],
-            "Default": [14, 30, 70],
-            "Impact": ["🔴 ELEVE", "🟡 MOYEN", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
+# =============================================================================
+# VISUALISATIONS OPTUNA
+# =============================================================================
 
-        st.markdown('<div class="category-header">🔹 MACD</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["macd_fast", "macd_slow", "macd_signal"],
-            "Range": ["8 - 15", "20 - 30", "7 - 12"],
-            "Default": [12, 26, 9],
-            "Impact": ["🔴 ELEVE", "🔴 ELEVE", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
+if OPTUNA_AVAILABLE and (study_rl or study_reward):
+    st.markdown("---")
+    st.markdown("## 📈 Visualisations Optuna")
 
-        st.markdown('<div class="category-header">🔹 Autres</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["bb_period", "bb_std", "atr_period", "adx_period", "adx_threshold"],
-            "Range": ["10-30", "1.5-3.0", "7-21", "10-20", "20-35"],
-            "Default": [20, 2.0, 14, 14, 25],
-            "Impact": ["🟡 MOYEN", "🟡 MOYEN", "🟡 MOYEN", "🟡 MOYEN", "🔴 ELEVE"]
-        }), use_container_width=True, hide_index=True)
+    viz_study = study_rl if study_rl else study_reward
+    study_name = "Hyperparamètres RL" if study_rl else "Rewards"
 
-# ============================================================================
-# PHASE 6: VOLATILITE
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['volatilite'] = st.checkbox("", value=st.session_state.progress['volatilite'], key="cb6")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['volatilite'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['volatilite'] else '<span class="status-pending">⏳ A FAIRE</span>'
+    if viz_study and len(viz_study.trials) > 0:
+        col1, col2 = st.columns(2)
 
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">6</span>
-            FILTRES DE VOLATILITE
-            {status_text}
-        </div>
-        <div class="reason-box">
-            <strong>Pourquoi en sixieme?</strong> Filtrer QUAND trader. Eviter les periodes dangereuses (flash crash, news).
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        with col1:
+            st.markdown(f"### Historique d'Optimisation - {study_name}")
+            try:
+                fig = optuna.visualization.plot_optimization_history(viz_study)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Impossible de créer le graphique: {e}")
 
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - VOLATILITE", expanded=False):
-        st.markdown('<div class="category-header">🔹 ATR Filter</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["atr_filter_min", "atr_filter_max", "atr_percentile_min", "atr_percentile_max"],
-            "Range": ["5 - 20", "50 - 150", "10 - 30", "70 - 95"],
-            "Default": [10, 100, 20, 90],
-            "Impact": ["🔴 CRITIQUE", "🔴 CRITIQUE", "🔴 CRITIQUE", "🔴 CRITIQUE"]
-        }), use_container_width=True, hide_index=True)
+        with col2:
+            st.markdown(f"### Importance des Paramètres - {study_name}")
+            try:
+                fig = optuna.visualization.plot_param_importances(viz_study)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Impossible de créer le graphique: {e}")
 
-        st.markdown('<div class="category-header">🔹 BB Width & Historical Vol</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["bb_width_min", "bb_width_max", "hvol_min", "hvol_max"],
-            "Range": ["0.005-0.02", "0.05-0.15", "0.05-0.15", "0.40-0.80"],
-            "Default": [0.01, 0.08, 0.10, 0.60],
-            "Impact": ["🔴 ELEVE", "🔴 ELEVE", "🟡 MOYEN", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
-
-# ============================================================================
-# PHASE 7: TEMPORELS
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['temporels'] = st.checkbox("", value=st.session_state.progress['temporels'], key="cb7")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['temporels'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['temporels'] else '<span class="status-pending">⏳ A FAIRE</span>'
-
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">7</span>
-            FILTRES TEMPORELS
-            {status_text}
-        </div>
-        <div class="reason-box">
-            <strong>Pourquoi en septieme?</strong> Sessions (London/NY), jours de la semaine, news buffer.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - TEMPORELS", expanded=False):
-        st.markdown('<div class="category-header">🔹 Sessions</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["trade_london", "trade_ny", "trade_overlap", "trade_asia"],
-            "Options": ["T/F", "T/F", "T/F", "T/F"],
-            "Recommande": [True, True, True, False],
-            "Impact": ["🔴 ELEVE", "🔴 ELEVE", "🔴 ELEVE", "🟢 BAS"]
-        }), use_container_width=True, hide_index=True)
-
-        st.markdown('<div class="category-header">🔹 News</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["avoid_high_impact", "news_buffer_before", "news_buffer_after"],
-            "Range": ["T/F", "5-60 min", "5-60 min"],
-            "Recommande": [True, "30 min", "15 min"],
-            "Impact": ["🔴 ELEVE", "🔴 ELEVE", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
-
-# ============================================================================
-# PHASE 8: SL/TP
-# ============================================================================
-col_check, col_content = st.columns([1, 11])
-with col_check:
-    st.session_state.progress['sltp'] = st.checkbox("", value=st.session_state.progress['sltp'], key="cb8")
-with col_content:
-    status = "phase-card-done" if st.session_state.progress['sltp'] else "phase-card-pending"
-    status_text = '<span class="status-done">✅ TERMINE</span>' if st.session_state.progress['sltp'] else '<span class="status-pending">⏳ A FAIRE</span>'
-
-    st.markdown(f"""
-    <div class="phase-card {status}">
-        <div class="phase-title">
-            <span class="phase-number">8</span>
-            SL/TP & RISK MANAGEMENT
-            {status_text}
-        </div>
-        <div class="reason-box">
-            <strong>Pourquoi en dernier?</strong> Risk management - fine-tuning final une fois que l'agent trade correctement.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.expander("📊 VOIR TOUS LES PARAMETRES - SL/TP", expanded=False):
-        st.markdown('<div class="category-header">🔹 Stop Loss</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["sl_atr_mult", "use_trailing_sl", "trailing_start"],
-            "Range": ["1.0 - 4.0", "T/F", "0.3 - 1.0"],
-            "Default": [2.5, True, 0.5],
-            "Impact": ["🔴 CRITIQUE", "🟡 MOYEN", "🔴 ELEVE"]
-        }), use_container_width=True, hide_index=True)
-
-        st.markdown('<div class="category-header">🔹 Take Profit</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["tp_rr_ratio", "tp_atr_mult", "use_partial_tp"],
-            "Range": ["1.5 - 5.0", "2.0 - 8.0", "T/F"],
-            "Default": [3.0, 4.0, True],
-            "Impact": ["🔴 CRITIQUE", "🟡 MOYEN", "🟡 MOYEN"]
-        }), use_container_width=True, hide_index=True)
-
-        st.markdown('<div class="category-header">🔹 Risk Management</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame({
-            "Parametre": ["risk_per_trade", "max_drawdown", "max_daily_trades"],
-            "Range": ["0.5% - 2.0%", "5% - 10%", "3 - 15"],
-            "Default": ["1%", "8%", 10],
-            "Impact": ["🟡 MOYEN", "🟡 MOYEN", "🟢 BAS"]
-        }), use_container_width=True, hide_index=True)
-
-# ============================================================================
+# =============================================================================
 # FOOTER
-# ============================================================================
-st.markdown("---")
-remaining = 8 - completed
-if remaining > 0:
-    st.info(f"📊 **{remaining} phases restantes** - Temps estime: ~{remaining * 6}h")
-else:
-    st.success("🚀 **PRET POUR TRAINING FINAL** - Lance 1.5M steps!")
+# =============================================================================
 
+st.markdown("---")
 st.markdown("""
-<div style="text-align: center; padding: 30px; color: #666;">
-    <p><strong>Guide Optuna Complet - Trading RL Gold</strong></p>
-    <p>Version 4.0 PRO - Ordre Revise Impact Maximum</p>
-    <p>Decembre 2025</p>
+<div style="text-align: center; padding: 20px; color: #666;">
+    <p><strong>Dashboard Optuna Intégré - Agent 8 RL Trading Gold</strong></p>
+    <p>Version 5.0 - Connexion Directe aux Études</p>
+    <p>Décembre 2025</p>
 </div>
 """, unsafe_allow_html=True)
